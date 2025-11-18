@@ -1,0 +1,156 @@
+import json
+import os
+import sys
+
+FILE_DB = "danh_ba.json"
+
+# HÀM HỖ TRỢ ĐỌC / GHI FILE JSON
+
+def doc_db():
+    if not os.path.exists(FILE_DB):
+        return []
+    with open(FILE_DB, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def ghi_db(data):
+    with open(FILE_DB, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+
+# TẠO FILE DANH BẠ NẾU CHƯA CÓ
+
+def khoi_tao_db():
+    if not os.path.exists(FILE_DB):
+        ghi_db([])
+        print("Đã tạo file danh bạ (JSON).")
+    else:
+        print("File danh bạ đã tồn tại.")
+# MENU
+def hien_thi_menu():
+    print("\n--- CHƯƠNG TRÌNH QUẢN LÝ DANH BẠ (KHÔNG CẦN MYSQL) ---")
+    print("1. Hiển thị danh bạ")
+    print("2. Thêm liên lạc")
+    print("3. Tìm kiếm")
+    print("4. Sửa liên lạc")
+    print("5. Xóa liên lạc")
+    print("6. Thoát")
+
+    while True:
+        try:
+            chon = int(input("Nhập lựa chọn (1-6): "))
+            if 1 <= chon <= 6:
+                return chon
+        except:
+            pass
+        print("Lựa chọn không hợp lệ.")
+
+# HIỂN THỊ
+def hien_thi_danh_ba():
+    data = doc_db()
+    if not data:
+        print(">> Danh bạ trống.")
+        return
+    print("\n--- DANH BẠ ---")
+    for item in data:
+        print(f"ID: {item['id']} - Tên: {item['ten']} - SĐT: {item['sdt']}")
+# THÊM
+
+def them_lien_lac():
+    ten = input("Nhập tên: ").strip()
+    sdt = input("Nhập SĐT: ").strip()
+
+    if not ten or not sdt:
+        print("Tên và SĐT không được trống.")
+        return
+
+    data = doc_db()
+
+    # kiểm tra trùng
+    for item in data:
+        if item["sdt"] == sdt:
+            print("Lỗi: SĐT đã tồn tại.")
+            return
+
+    # tự tăng ID
+    new_id = 1 if not data else data[-1]["id"] + 1
+
+    data.append({"id": new_id, "ten": ten, "sdt": sdt})
+    ghi_db(data)
+    print("Thêm thành công!")
+# TÌM KIẾM
+def tim_kiem():
+    keyword = input("Nhập tên cần tìm: ").strip()
+    data = doc_db()
+    ket_qua = [item for item in data if keyword.lower() in item["ten"].lower()]
+
+    if not ket_qua:
+        print("Không tìm thấy.")
+        return
+
+    print("--- KẾT QUẢ TÌM KIẾM ---")
+    for item in ket_qua:
+        print(f"ID: {item['id']} - Tên: {item['ten']} - SĐT: {item['sdt']}")
+# SỬA
+def sua():
+    data = doc_db()
+    try:
+        id_sua = int(input("Nhập ID cần sửa: "))
+    except:
+        print("ID không hợp lệ.")
+        return
+
+    for item in data:
+        if item["id"] == id_sua:
+            print(f"Đang sửa: {item['ten']} - {item['sdt']}")
+            ten_moi = input("Tên mới (Enter để giữ nguyên): ").strip()
+            sdt_moi = input("SĐT mới (Enter để giữ nguyên): ").strip()
+
+            if ten_moi:
+                item["ten"] = ten_moi
+            if sdt_moi:
+                item["sdt"] = sdt_moi
+
+            ghi_db(data)
+            print("Sửa thành công!")
+            return
+
+    print("Không tìm thấy ID.")
+# XÓA
+def xoa():
+    data = doc_db()
+    try:
+        id_xoa = int(input("Nhập ID cần xóa: "))
+    except:
+        print("ID không hợp lệ.")
+        return
+
+    for item in data:
+        if item["id"] == id_xoa:
+            data.remove(item)
+            ghi_db(data)
+            print("Đã xóa!")
+            return
+
+    print("Không tìm thấy ID.")
+# CHẠY CHƯƠNG TRÌNH
+def main():
+    khoi_tao_db()
+
+    while True:
+        chon = hien_thi_menu()
+
+        if chon == 1:
+            hien_thi_danh_ba()
+        elif chon == 2:
+            them_lien_lac()
+        elif chon == 3:
+            tim_kiem()
+        elif chon == 4:
+            sua()
+        elif chon == 5:
+            xoa()
+        elif chon == 6:
+            print("Tạm biệt!")
+            sys.exit()
+
+if __name__ == "__main__":
+    main()
