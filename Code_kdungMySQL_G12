@@ -1,0 +1,170 @@
+import json
+import os
+import sys
+
+DB_FILE = "contacts.json"
+
+# ===== JSON READ/WRITE HELPERS =====
+
+def read_db():
+    if not os.path.exists(DB_FILE):
+        return []
+    with open(DB_FILE, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+def write_db(data):
+    with open(DB_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=4)
+
+# ===== INITIALIZE DATABASE FILE =====
+
+def init_db():
+    if not os.path.exists(DB_FILE):
+        write_db([])
+        print("Contact file created (JSON).")
+    else:
+        print("Contact file already exists.")
+
+# ===== MENU =====
+
+def show_menu():
+    print("\n--- CONTACT MANAGEMENT PROGRAM (NO MYSQL NEEDED) ---")
+    print("1. Show all contacts")
+    print("2. Add a new contact")
+    print("3. Search contact")
+    print("4. Edit contact")
+    print("5. Delete contact")
+    print("6. Exit")
+
+    while True:
+        try:
+            choice = int(input("Enter your choice (1-6): "))
+            if 1 <= choice <= 6:
+                return choice
+        except:
+            pass
+        print("Invalid choice.")
+
+# ===== DISPLAY CONTACTS =====
+
+def show_contacts():
+    data = read_db()
+    if not data:
+        print(">> No contacts found.")
+        return
+
+    print("\n--- CONTACT LIST ---")
+    for item in data:
+        print(f"ID: {item['id']} - Name: {item['name']} - Phone: {item['phone']}")
+
+# ===== ADD CONTACT =====
+
+def add_contact():
+    name = input("Enter name: ").strip()
+    phone = input("Enter phone number: ").strip()
+
+    if not name or not phone:
+        print("Name and phone number cannot be empty.")
+        return
+
+    data = read_db()
+
+    # Check duplicate phone
+    for item in data:
+        if item["phone"] == phone:
+            print("Error: This phone number already exists.")
+            return
+
+    # Auto-increment ID
+    new_id = 1 if not data else data[-1]["id"] + 1
+
+    data.append({"id": new_id, "name": name, "phone": phone})
+    write_db(data)
+    print("Contact added successfully!")
+
+# ===== SEARCH CONTACT =====
+
+def search_contact():
+    keyword = input("Enter name to search: ").strip()
+    data = read_db()
+
+    results = [item for item in data if keyword.lower() in item["name"].lower()]
+
+    if not results:
+        print("No matching contacts found.")
+        return
+
+    print("--- SEARCH RESULTS ---")
+    for item in results:
+        print(f"ID: {item['id']} - Name: {item['name']} - Phone: {item['phone']}")
+
+# ===== EDIT CONTACT =====
+
+def edit_contact():
+    data = read_db()
+    try:
+        edit_id = int(input("Enter ID to edit: "))
+    except:
+        print("Invalid ID.")
+        return
+
+    for item in data:
+        if item["id"] == edit_id:
+            print(f"Editing: {item['name']} - {item['phone']}")
+            new_name = input("New name (press Enter to keep current): ").strip()
+            new_phone = input("New phone (press Enter to keep current): ").strip()
+
+            if new_name:
+                item["name"] = new_name
+            if new_phone:
+                item["phone"] = new_phone
+
+            write_db(data)
+            print("Contact updated successfully!")
+            return
+
+    print("ID not found.")
+
+# ===== DELETE CONTACT =====
+
+def delete_contact():
+    data = read_db()
+    try:
+        delete_id = int(input("Enter ID to delete: "))
+    except:
+        print("Invalid ID.")
+        return
+
+    for item in data:
+        if item["id"] == delete_id:
+            data.remove(item)
+            write_db(data)
+            print("Contact deleted successfully!")
+            return
+
+    print("ID not found.")
+
+# ===== MAIN PROGRAM =====
+
+def main():
+    init_db()
+
+    while True:
+        choice = show_menu()
+
+        if choice == 1:
+            show_contacts()
+        elif choice == 2:
+            add_contact()
+        elif choice == 3:
+            search_contact()
+        elif choice == 4:
+            edit_contact()
+        elif choice == 5:
+            delete_contact()
+        elif choice == 6:
+            print("Goodbye!")
+            sys.exit()
+
+if __name__ == "__main__":
+    main()
