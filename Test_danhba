@@ -1,0 +1,77 @@
+import mysql.connector
+import pytest
+from danhba import ket_noi_database, khoi_tao_db, them_lien_lac, hien_thi_danh_ba
+
+@pytest.fixture(scope="module")
+def ket_noi():
+    """Tạo kết nối thật đến MySQL để test."""
+    conn = ket_noi_database()
+    khoi_tao_db(conn)
+
+    # Dọn dữ liệu cũ (Chạy một lần cho module)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM danh_ba")
+    conn.commit()
+    yield conn
+
+    # đóng kết nối sau khi test xong
+    conn.close()
+
+
+def test_ket_noi_mysql(ket_noi):
+    """Test kết nối MySQL có hoạt động không."""
+    assert ket_noi.is_connected()
+
+def test_them_lien_lac(ket_noi, capsys, monkeypatch): # THÊM 'monkeypatch' vào đây
+    """Test thêm một liên lạc mới."""
+    
+    # Chuẩn bị dữ liệu giả lập
+    inputs = iter(["Huy Hoàng", "0123456789"])
+    def fake_input(prompt=""):
+        return next(inputs)
+
+    # Dùng monkeypatch để thay thế hàm input() mặc định
+    # Thay thế input() bằng dữ liệu giả / Vì pytest k ngồi dder viết được dữ liệu nên dùng monkeypathch
+    # Giúp pytest hoạt động hoàn toàn tự động.
+    monkeypatch.setattr('builtins.input', fake_input) 
+
+    # Gọi hàm mà KHÔNG truyền đối số 'input'
+    them_lien_lac(ket_noi) 
+
+    # Kiểm tra DB
+    cursor = ket_noi.cursor()
+    cursor.execute("SELECT ten_lien_lac, so_dien_thoai FROM danh_ba WHERE ten_lien_lac = 'Huy Hoàng'")
+    data = cursor.fetchone()
+
+    assert data == ("Huy Hoàng", "0123456789")
+    
+    # Dọn dẹp dữ liệu đã thêm bởi test này
+    cursor.execute("DELETE FROM danh_ba WHERE ten_lien_lac = 'Huy Hoàng'")
+    ket_noi.commit()
+
+
+#  AssertionError (Thêm dữ liệu độc lập trước khi hiển thị)
+def test_hien_thi_danh_ba(ket_noi, capsys):
+    """Test chức năng hiển thị danh bạ."""
+    
+    # 1. THÊM DỮ LIỆU CỤ THỂ CHO TEST NÀY (Đảm bảo tính độc lập)
+    cursor = ket_noi.cursor()
+    cursor.execute("INSERT INTO danh_ba (ten_lien_lac, so_dien_thoai) VALUES (%s, %s)", 
+                   ("Tên Test", "9876543210"))
+    ket_noi.commit()
+
+    # 2. Gọi hàm hiển thị
+    hien_thi_danh_ba(ket_noi)
+    captured = capsys.readouterr()
+    
+    # 3. Kiểm tra
+    assert "Tên Test" in captured.out
+    assert "9876543210" in captured.out
+    
+    # 4. Dọn dẹp dữ liệu đã thêm
+    cursor.execute("DELETE FROM danh_ba WHERE ten_lien_lac = 'Tên Test'")
+    ket_noi.commit()
+    
+# Vì chương trình input() nên pytest không thể chạy nếu không dùng mô phỏng dữ liệu giả 
+# Vì cần chuẩn bị database test dọn (dọn dữ liệu và thêm dữ liệu mẫu)
+#Vì cần Capture output để kiểm tra hàm in đúng hay không
