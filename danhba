@@ -1,0 +1,205 @@
+import mysql.connector
+from mysql.connector import Error
+import sys
+CAU_HINH_DB = {
+    'host': 'localhost',
+    'user': 'root',
+    'password': 'SHA256',
+    'database': 'contact_db',
+    'port': 3306
+}
+# Kết nối đến MySQL.
+# In ra thông báo nếu kết nối thành công.
+# Nếu lỗi thì dừng chương trình (sys.exit(1)).
+def ket_noi_database():
+    ket_noi = None
+    try:
+        ket_noi = mysql.connector.connect(**CAU_HINH_DB)
+        if ket_noi.is_connected():
+            print("Kết nối đến cơ sở dữ liệu MySQL thành công!")
+            return ket_noi
+    except Error as e:
+        print(f"Lỗi khi kết nối đến MySQL: {e}")
+        sys.exit(1)
+# Tạo bảng danh_ba nếu chưa tồn tại
+def khoi_tao_db(ket_noi):
+    con_tro = ket_noi.cursor()
+    tao_bang = """
+    CREATE TABLE IF NOT EXISTS danh_ba (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        ten_lien_lac VARCHAR(255) NOT NULL,
+        so_dien_thoai VARCHAR(50) NOT NULL,
+        UNIQUE(so_dien_thoai)
+    )
+    """
+    try:
+        con_tro.execute(tao_bang)
+        print("Bảng 'danh_ba' đã oke.")
+        con_tro.close()
+    except Error as e:
+        print(f"Lỗi khi khởi tạo bảng: {e}")
+# Hàm hiển thị dùng để in menu và bắt buộc user phải chọn 1-6
+def hien_thi_menu():
+    print("\n--- CHƯƠNG TRÌNH QUẢN LÝ DANH BẠ ---")
+    print("1. Hiển thị toàn bộ danh bạ")
+    print("2. Thêm liên lạc mới")
+    print("3. Tìm kiếm liên lạc")
+    print("4. Sửa liên lạc")
+    print("5. Xóa liên lạc")
+    print("6. Thoát")
+    while True:
+        try:
+            lua_chon = int(input("Nhập lựa chọn của bạn (1-6): "))
+            if 1 <= lua_chon <= 6:
+                return lua_chon
+            else:
+                print("Lựa chọn không hợp lệ. Vui lòng nhập số từ 1 đến 6.")
+        except ValueError:
+            print("Vui lòng nhập một số.")
+
+# Các hàm xử lý CRUD , hiển thị danh bạ và SELECT toàn bộ và in ra
+def hien_thi_danh_ba(ket_noi):
+    con_tro = ket_noi.cursor()
+    con_tro.execute("SELECT id, ten_lien_lac, so_dien_thoai FROM danh_ba")
+    ket_qua = con_tro.fetchall()
+    con_tro.close()
+    if not ket_qua:
+        print("\n>> Danh bạ hiện đang trống.")
+    else:
+        print("\n--- DANH BẠ LIÊN LẠC ---")
+        for (id, ten, sdt) in ket_qua:
+            print(f"ID: {id} - Tên: {ten} - SĐT: {sdt}")
+        print("--------------------------")
+
+# them_lien_lac()
+# Dùng input để nhập tên và số điện thoại.
+# Kiểm tra trống.
+# Kiểm tra trùng số (bạn bị sai 1 chỗ: WHERE ten_lien_lac = %s nhưng truyền sdt → bug nhỏ).
+# Thêm vào DB và commit.
+def them_lien_lac(ket_noi):
+    ten_moi = input("Nhập tên liên lạc: ").strip()
+    sdt_moi = input("Nhập số điện thoại: ").strip()
+    if not ten_moi or not sdt_moi:
+        print("Lỗi: Tên và số điện thoại không được để trống.")
+        return
+    con_tro = ket_noi.cursor()
+    con_tro.execute("SELECT * FROM danh_ba WHERE ten_lien_lac = %s", (sdt_moi,))
+    if con_tro.fetchone():
+        print(f"Lỗi: Liên lạc với tên '{sdt_moi}' đã tồn tại.")
+    else:
+        cau_lenh_them = "INSERT INTO danh_ba (ten_lien_lac, so_dien_thoai) VALUES (%s, %s)"
+        try:
+            con_tro.execute(cau_lenh_them, (ten_moi, sdt_moi))
+            ket_noi.commit()
+            print(f"Đã thêm liên lạc '{ten_moi}' thành công!")
+        except Error as e:
+            print(f"Lỗi khi thêm liên lạc: {e}")
+            ket_noi.rollback() 
+    con_tro.close()
+    
+#tim_kiem_lien_lac()
+#SELECT theo LIKE.
+def tim_kiem_lien_lac(ket_noi):
+    ten_can_tim = input("Nhập tên liên lạc cần tìm: ").strip()
+    if not ten_can_tim:
+        print("Vui lòng nhập tên để tìm kiếm.")
+        return
+    con_tro = ket_noi.cursor()
+    cau_lenh_tim = "SELECT id, ten_lien_lac, so_dien_thoai FROM danh_ba WHERE ten_lien_lac LIKE %s"
+    chuoi_tim_kiem = f"%{ten_can_tim}%" 
+    con_tro.execute(cau_lenh_tim, (chuoi_tim_kiem,))
+    ket_qua = con_tro.fetchall()
+    con_tro.close()
+    if not ket_qua:
+        print(f"\n>> Không tìm thấy liên lạc nào có tên chứa '{ten_can_tim}'.")
+    else:
+        print(f"\n--- KẾT QUẢ TÌM KIẾM CHO '{ten_can_tim}' ---")
+        for (id, ten, sdt) in ket_qua:
+            print(f"ID: {id} - Tên: {ten} - SĐT: {sdt}")
+        print("---------------------------------------")
+        
+#sua_lien_lac()
+#Nhập ID → lấy record → update.
+def sua_lien_lac(ket_noi):
+    try:
+        id_can_sua = int(input("Nhập ID của liên lạc cần sửa (xem ID bằng cách 'Hiển thị danh bạ'): ").strip())
+    except ValueError:
+        print("ID phải là một số.")
+        return
+    con_tro = ket_noi.cursor()
+    con_tro.execute("SELECT ten_lien_lac, so_dien_thoai FROM danh_ba WHERE id = %s", (id_can_sua,))
+    lien_lac = con_tro.fetchone()
+    if not lien_lac:
+        print(f"Lỗi: Không tìm thấy liên lạc với ID {id_can_sua}.")
+        con_tro.close()
+        return
+    print(f"Đang sửa liên lạc: Tên: {lien_lac[0]}, SĐT: {lien_lac[1]}")
+    ten_moi = input(f"Nhập tên mới (để trống để giữ '{lien_lac[0]}'): ").strip()
+    sdt_moi = input(f"Nhập SĐT mới (để trống để giữ '{lien_lac[1]}'): ").strip()
+    ten_cap_nhat = ten_moi if ten_moi else lien_lac[0]
+    sdt_cap_nhat = sdt_moi if sdt_moi else lien_lac[1]
+    cau_lenh_sua = "UPDATE danh_ba SET ten_lien_lac = %s, so_dien_thoai = %s WHERE id = %s"
+    try:
+        con_tro.execute(cau_lenh_sua, (ten_cap_nhat, sdt_cap_nhat, id_can_sua))
+        ket_noi.commit()
+        print(f"Đã cập nhật liên lạc ID {id_can_sua} thành công!")
+    except Error as e:
+        print(f"Lỗi khi cập nhật: {e}")
+        ket_noi.rollback()
+    con_tro.close()
+
+#xoa_lien_lac()
+#Nhập ID → hỏi xác nhận → xóa
+def xoa_lien_lac(ket_noi):
+    try:
+        id_can_xoa = int(input("Nhập ID của liên lạc cần xóa (xem ID bằng cách 'Hiển thị danh bạ'): ").strip())
+    except ValueError:
+        print("ID phải là một số.")
+        return
+    con_tro = ket_noi.cursor()
+    con_tro.execute("SELECT ten_lien_lac FROM danh_ba WHERE id = %s", (id_can_xoa,))
+    lien_lac = con_tro.fetchone()
+    if not lien_lac:
+        print(f"Lỗi: Không tìm thấy liên lạc với ID {id_can_xoa}.")
+        con_tro.close()
+        return
+    ten_lien_lac = lien_lac[0]
+    xac_nhan = input(f"Bạn có chắc chắn muốn xóa liên lạc '{ten_lien_lac}' (ID: {id_can_xoa})? (Y/N): ").strip().upper()
+    if xac_nhan == 'Y':
+        cau_lenh_xoa = "DELETE FROM danh_ba WHERE id = %s"
+        try:
+            con_tro.execute(cau_lenh_xoa, (id_can_xoa,))
+            ket_noi.commit()
+            print(f"Đã xóa liên lạc '{ten_lien_lac}' thành công!")
+        except Error as e:
+            print(f"Lỗi khi xóa: {e}")
+            ket_noi.rollback()
+    else:
+        print("Đã hủy thao tác xóa.")
+    con_tro.close()
+
+#Hàm quan_ly_danh_ba()
+#Chạy vòng lặp menu để gọi các chức năng
+def quan_ly_danh_ba():
+    ket_noi = ket_noi_database()
+    if ket_noi:
+        khoi_tao_db(ket_noi)
+        while True:
+            lua_chon = hien_thi_menu()
+            if lua_chon == 1:
+                hien_thi_danh_ba(ket_noi)
+            elif lua_chon == 2:
+                them_lien_lac(ket_noi)
+            elif lua_chon == 3:
+                tim_kiem_lien_lac(ket_noi)
+            elif lua_chon == 4:
+                sua_lien_lac(ket_noi)
+            elif lua_chon == 5:
+                xoa_lien_lac(ket_noi)
+            elif lua_chon == 6:
+                print("Cảm ơn bạn đã sử dụng chương trình! Tạm biệt.")
+                break
+        ket_noi.close()
+        print("Đã ngắt kết nối CSDL.")
+if __name__ == "__main__":
+    quan_ly_danh_ba()
